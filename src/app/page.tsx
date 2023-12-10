@@ -1,95 +1,97 @@
-import Image from 'next/image'
-import styles from './page.module.css'
+'use client'
+
+import { Canvas } from '@react-three/fiber'
+import {
+  OrbitControls,
+  AccumulativeShadows,
+  RandomizedLight
+} from '@react-three/drei'
+import { Perf } from 'r3f-perf'
+import { GcodeParser } from '@/lib/gcode-parser'
+import { BufferGeometry, Vector3 } from 'three'
+import { G1 } from '@/lib/entity/g1'
+import { useState } from 'react'
+
+type Prop = { vector3s: Vector3[]; currentLine: number }
+
+const LinesFromGcode = (props: Prop) => {
+  const lineGeometry = new BufferGeometry().setFromPoints(props.vector3s)
+  return (
+    <>
+      <group position={[0, -2.5, -10]}>
+        <line>
+          <bufferGeometry attach="geometry" {...lineGeometry} />
+          <lineBasicMaterial
+            attach="material"
+            color={'#9c88ff'}
+            linewidth={10}
+            linecap={'round'}
+            linejoin={'round'}
+          />
+        </line>
+      </group>
+    </>
+  )
+}
 
 export default function Home() {
+  const [currentLine, setCurrentLine] = useState(2)
+  const [vector3s, setVector3s] = useState<Vector3[]>([])
+  const intensity = 4
+
+  const increaseLine = () => {
+    setCurrentLine((prev) => prev + 1)
+    console.log(currentLine)
+  }
+
+  const inputFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files === null) return
+
+    const file = files[0]
+    const reader = new FileReader()
+    reader.readAsText(file)
+    reader.onload = () => {
+      const gcodes = new GcodeParser()
+        .parseFile(reader.result as string)
+        .filter((g) => g instanceof G1 && g.isMoving()) as G1[]
+
+      const vectors = []
+      let lastPoint = { x: 0, y: 0, z: 0 }
+      for (const gcode of gcodes) {
+        const vec = new Vector3(
+          gcode.x || lastPoint.x,
+          gcode.y || lastPoint.y,
+          gcode.z || lastPoint.z
+        )
+        if (gcode.isExtrude()) {
+          vectors.push(vec)
+        }
+        lastPoint = { x: vec.x, y: vec.y, z: vec.z }
+      }
+      setVector3s(vectors)
+    }
+  }
+
   return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
+    <>
+      <div id="canvas-container" style={{ width: '50vw', height: '50vh' }}>
+        <Canvas>
+          <OrbitControls makeDefault />
+
+          <Perf position="top-left" />
+          <ambientLight intensity={intensity} />
+          <hemisphereLight intensity={0.5} />
+
+          <AccumulativeShadows temporal frames={100} scale={10}>
+            <RandomizedLight amount={8} position={[5, 5, -10]} />
+          </AccumulativeShadows>
+
+          <LinesFromGcode currentLine={currentLine} vector3s={vector3s} />
+        </Canvas>
       </div>
-
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      <input type="file" id="input" accept=".gcode" onChange={inputFile} />
+      <button onClick={increaseLine}>Write</button>
+    </>
   )
 }
