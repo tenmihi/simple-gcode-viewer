@@ -3,8 +3,8 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Vector3 } from 'three'
-import { useState } from 'react'
-import { GcodeRender } from '@/components/gcode-render'
+import { useEffect, useState } from 'react'
+import { GcodeRenderer } from '@/components/gcode-renderer'
 import { convertGcodeToVector3 } from '@/lib/gcode-to-vector3-converter'
 import {
   Card,
@@ -17,8 +17,13 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 
 export default function Home() {
+  const [layerPercent, setLayerPercent] = useState<number>(100)
+
+  const [originalVectorsGroupByZ, setOriginalVectorsGroupByZ] =
+    useState<Record<string, Vector3[]>>()
   const [vectorsGroupByZ, setVectorsGroupByZ] =
-    useState<Record<number, Vector3[]>>()
+    useState<Record<string, Vector3[]>>()
+  const [sortedZLayers, setSortedZLayers] = useState<number[]>([])
 
   const inputFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -31,9 +36,35 @@ export default function Home() {
     reader.onload = () => {
       const gcode = reader.result as string
       const zToVec3 = convertGcodeToVector3(gcode)
-      setVectorsGroupByZ(zToVec3)
+
+      const zArr = Object.keys(zToVec3)
+        .map((z) => Number(z))
+        .sort((a, b) => a - b)
+      setSortedZLayers(zArr)
+
+      setOriginalVectorsGroupByZ(zToVec3)
     }
   }
+
+  const onChangeLayerPercent = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const percent = Number(event.target.value)
+    setLayerPercent(percent)
+  }
+
+  useEffect(() => {
+    if (originalVectorsGroupByZ === undefined) return
+
+    const filteredVectorsGroupByZ: Record<string, Vector3[]> = {}
+    const minZ = sortedZLayers[0]
+    const maxZ = sortedZLayers[sortedZLayers.length - 1]
+    for (const z of sortedZLayers) {
+      const zNum = Number(z)
+      if (zNum > (maxZ - minZ) * (layerPercent / 100)) break
+      filteredVectorsGroupByZ[zNum] = originalVectorsGroupByZ[zNum]
+    }
+
+    setVectorsGroupByZ(filteredVectorsGroupByZ)
+  }, [layerPercent, originalVectorsGroupByZ])
 
   return (
     <>
@@ -66,7 +97,7 @@ export default function Home() {
                         position={[-10, 10, 10]}
                       />
 
-                      <GcodeRender vectorsGroupByZ={vectorsGroupByZ} />
+                      <GcodeRenderer vectorsGroupByZ={vectorsGroupByZ} />
                     </Canvas>
                   </div>
                 ) : (
@@ -95,14 +126,17 @@ export default function Home() {
                   onChange={inputFile}
                 />
                 <Label className="text-left" htmlFor="range">
-                  Adjust Zoom
+                  Print Layer
                 </Label>
                 <Input
                   className="w-full"
                   id="range"
                   max="100"
                   min="1"
+                  step="1"
                   type="range"
+                  style={{ paddingLeft: '0', paddingRight: '0' }}
+                  onChange={onChangeLayerPercent}
                 />
               </div>
             </CardContent>

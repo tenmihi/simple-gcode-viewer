@@ -1,8 +1,8 @@
 import { Vector3, BufferGeometry } from 'three'
 
-type Prop = { vectorsGroupByZ: Record<number, Vector3[]> }
+type Prop = { vectorsGroupByZ: Record<string, Vector3[]> }
 
-export const GcodeRender = ({ vectorsGroupByZ }: Prop) => {
+export const GcodeRenderer = ({ vectorsGroupByZ }: Prop) => {
   const zArr = Object.keys(vectorsGroupByZ)
     .map((z) => Number(z))
     .sort((a, b) => a - b)
